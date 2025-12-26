@@ -1,15 +1,23 @@
 use anyhow::{Context, Result};
 use std::process::Command;
 
-/// Switch to a specific pane
+/// Switch to a specific pane (works across sessions)
 pub fn switch_to_pane(session: &str, window: u32, pane: u32) -> Result<()> {
     let target = format!("{}:{}.{}", session, window, pane);
 
+    // First, switch the client to the target session (enables cross-session navigation)
+    Command::new("tmux")
+        .args(["switch-client", "-t", session])
+        .output()
+        .context("Failed to switch session")?;
+
+    // Then select the window within that session
     Command::new("tmux")
         .args(["select-window", "-t", &format!("{}:{}", session, window)])
         .output()
         .context("Failed to select window")?;
 
+    // Finally select the specific pane
     Command::new("tmux")
         .args(["select-pane", "-t", &target])
         .output()

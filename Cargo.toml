@@ -1,6 +1,6 @@
 [package]
 name = "claude-tools"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "CLI tools for Claude Code - monitor, resume, sync, budget"
 license = "MIT"
