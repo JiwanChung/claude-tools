@@ -1,5 +1,7 @@
 # claude-tools
 
+> **⚠️ DEPRECATED**: This project has been deprecated in favor of [coder-tools](https://github.com/JiwanChug/coder-tools). Please use that repository for the latest updates and features.
+
 **A powerful CLI toolkit for managing Claude Code sessions, workflows, and resources.**
 
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
