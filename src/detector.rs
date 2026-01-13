@@ -50,6 +50,7 @@ pub struct DetectionResult {
     pub last_user_prompt: Option<String>,
     pub current_tool: Option<String>,
     pub tool_detail: Option<String>,
+    #[allow(dead_code)]
     pub model: Option<String>,
     // Task from pane title
     pub pane_task: Option<String>,

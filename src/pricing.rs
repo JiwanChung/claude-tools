@@ -104,6 +104,7 @@ pub struct JsonlEntry {
 /// Session usage summary with cost
 #[derive(Debug, Clone, Default)]
 pub struct SessionCost {
+    #[allow(dead_code)]
     pub model: String,
     pub usage: TokenUsage,
     pub cost_usd: f64,
