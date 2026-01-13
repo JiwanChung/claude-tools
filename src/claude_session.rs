@@ -1,3 +1,4 @@
+use crate::pricing::{self, SessionCost};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::fs;
@@ -17,6 +18,7 @@ pub struct SessionInfo {
     pub stop_reason: Option<String>,
     pub is_streaming: bool,
     pub is_idle: bool,
+    pub session_cost: Option<SessionCost>,
 }
 
 /// Find Claude process PID by TTY
@@ -350,6 +352,9 @@ pub fn get_session_info_by_tty(tty: &str) -> Option<SessionInfo> {
 
     let mut info = parse_session_context(&jsonl_path).ok()?;
     info.cwd = Some(cwd);
+
+    // Calculate session cost from JSONL
+    info.session_cost = pricing::calculate_session_cost(&jsonl_path);
 
     // Get streaming/idle state from debug log, and last prompt from history
     if let Some(session_id) = &info.session_id {

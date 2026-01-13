@@ -39,6 +39,8 @@ impl fmt::Display for Status {
     }
 }
 
+use crate::pricing::SessionCost;
+
 #[derive(Debug, Clone, Default)]
 pub struct DetectionResult {
     pub status: Status,
@@ -51,6 +53,8 @@ pub struct DetectionResult {
     pub model: Option<String>,
     // Task from pane title
     pub pane_task: Option<String>,
+    // Session usage and cost
+    pub session_cost: Option<SessionCost>,
 }
 
 impl Default for Status {
@@ -187,6 +191,7 @@ fn detect_from_session_info(info: SessionInfo, content: &str) -> DetectionResult
         tool_detail: info.tool_detail,
         model: info.model,
         pane_task: None, // Set by caller
+        session_cost: info.session_cost,
     }
 }
 

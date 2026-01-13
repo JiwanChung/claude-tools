@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::detector::Status;
+use crate::pricing::{format_cost, format_tokens};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -225,7 +226,13 @@ fn render_grouped_items(app: &App, panes: &[&crate::app::PaneState], selected_in
             ),
         ];
 
-        if let Some(ref tokens) = pane_state.status.tokens {
+        // Add session cost if available
+        if let Some(ref cost) = pane_state.status.session_cost {
+            spans.push(Span::styled(
+                format!(" {}", format_cost(cost.cost_usd)),
+                Style::default().fg(Color::Magenta),
+            ));
+        } else if let Some(ref tokens) = pane_state.status.tokens {
             spans.push(Span::styled(
                 format!(" ({})", tokens),
                 Style::default().fg(Color::Magenta),
@@ -286,8 +293,13 @@ fn render_compact_items(panes: &[&crate::app::PaneState], selected_index: usize)
                 ),
             ];
 
-            // Add token count if available
-            if let Some(ref tokens) = pane_state.status.tokens {
+            // Add session cost if available, otherwise fallback to tokens
+            if let Some(ref cost) = pane_state.status.session_cost {
+                spans.push(Span::styled(
+                    format!(" {} ({})", format_cost(cost.cost_usd), format_tokens(cost.usage.total())),
+                    Style::default().fg(Color::Magenta),
+                ));
+            } else if let Some(ref tokens) = pane_state.status.tokens {
                 spans.push(Span::styled(
                     format!(" ({})", tokens),
                     Style::default().fg(Color::Magenta),
@@ -356,8 +368,14 @@ fn render_full_items(panes: &[&crate::app::PaneState], selected_index: usize) ->
                 ),
             ];
 
-            // Add token count if available
-            if let Some(ref tokens) = pane_state.status.tokens {
+            // Add session cost and token usage if available
+            if let Some(ref cost) = pane_state.status.session_cost {
+                line2_spans.push(Span::styled(
+                    format!("  {} ({})", format_cost(cost.cost_usd), format_tokens(cost.usage.total())),
+                    Style::default().fg(Color::Magenta),
+                ));
+            } else if let Some(ref tokens) = pane_state.status.tokens {
+                // Fallback to screen-scraped tokens
                 line2_spans.push(Span::styled(
                     format!(" ({})", tokens),
                     Style::default().fg(Color::Magenta),
@@ -442,6 +460,16 @@ fn render_stats(frame: &mut Frame, app: &App, area: Rect) {
     let stats = app.aggregated_stats();
     let panes = app.visible_panes();
 
+    // Calculate total cost and tokens across all panes
+    let mut total_cost: f64 = 0.0;
+    let mut total_tokens: u64 = 0;
+    for pane in &panes {
+        if let Some(ref cost) = pane.status.session_cost {
+            total_cost += cost.cost_usd;
+            total_tokens += cost.usage.total();
+        }
+    }
+
     let mut lines = vec![
         Line::from(vec![
             Span::styled(" Aggregated Stats ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
@@ -454,6 +482,24 @@ fn render_stats(frame: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![
             Span::raw("  State changes:   "),
             Span::styled(format!("{}", stats.total_state_changes), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("  Token Usage & Cost:", Style::default().add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::raw("    Total tokens: "),
+            Span::styled(
+                format_tokens(total_tokens),
+                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::raw("    Total cost:   "),
+            Span::styled(
+                format_cost(total_cost),
+                Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(""),
         Line::from(vec![
@@ -499,11 +545,14 @@ fn render_stats(frame: &mut Frame, app: &App, area: Rect) {
         ]));
 
         for pane in panes.iter().take(10) {
-            let total = pane.stats.total_working_secs + pane.stats.total_waiting_secs + pane.stats.total_permission_secs;
-            let current = pane.status_changed_at.elapsed().as_secs();
-            let total_with_current = total + current;
-
             let (_, folder) = split_path(&pane.pane.current_path);
+
+            let cost_str = if let Some(ref cost) = pane.status.session_cost {
+                format!(" {} ({})", format_cost(cost.cost_usd), format_tokens(cost.usage.total()))
+            } else {
+                String::new()
+            };
+
             lines.push(Line::from(vec![
                 Span::raw("    "),
                 Span::styled(
@@ -511,16 +560,8 @@ fn render_stats(frame: &mut Frame, app: &App, area: Rect) {
                     Style::default().fg(Color::Cyan),
                 ),
                 Span::styled(
-                    format!(" W:{:<6}", format_duration(std::time::Duration::from_secs(pane.stats.total_working_secs))),
-                    Style::default().fg(Color::Yellow),
-                ),
-                Span::styled(
-                    format!(" I:{:<6}", format_duration(std::time::Duration::from_secs(pane.stats.total_waiting_secs))),
-                    Style::default().fg(Color::Green),
-                ),
-                Span::styled(
-                    format!(" T:{}", format_duration(std::time::Duration::from_secs(total_with_current))),
-                    Style::default().fg(Color::DarkGray),
+                    cost_str,
+                    Style::default().fg(Color::Magenta),
                 ),
             ]));
         }

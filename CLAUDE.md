@@ -10,6 +10,7 @@ TUI dashboard for monitoring multiple Claude Code sessions across tmux panes.
 
 **Features:**
 - Real-time status detection (waiting, working, permission required, idle)
+- Token usage and cost tracking per session (USD)
 - Auto-refresh with configurable interval
 - Filter to show only Claude Code sessions or all panes
 - Keyboard navigation
@@ -37,6 +38,7 @@ claude-tools/
 │   ├── app.rs            # Application state management
 │   ├── detector.rs       # Claude Code status detection logic
 │   ├── claude_session.rs # Session file parsing (~/.claude/projects, debug logs)
+│   ├── pricing.rs        # Token pricing and cost calculation
 │   ├── tmux.rs           # tmux interaction (list panes, capture content)
 │   └── ui.rs             # TUI rendering with ratatui
 ├── Cargo.toml
@@ -51,6 +53,17 @@ Detection uses multiple signals for accuracy:
 2. **Session files** - `~/.claude/projects/{path}/*.jsonl` for context (tool, model, stop_reason)
 3. **Debug logs** - `~/.claude/debug/{session}.txt` for real-time state (Stream started, idle_prompt)
 4. **Screen content** - Fallback for permission prompts (Allow/Deny buttons)
+
+## Cost Tracking
+
+Token usage and costs are calculated from session JSONL files:
+- **Input tokens**: Base input cost
+- **Output tokens**: Output cost
+- **Cache writes (5m)**: 1.25x input cost
+- **Cache writes (1h)**: 2x input cost
+- **Cache reads**: 0.1x input cost
+
+Pricing from [Anthropic's official pricing](https://platform.claude.com/docs/en/about-claude/pricing).
 
 ## Development
 

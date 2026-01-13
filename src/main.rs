@@ -3,6 +3,7 @@ mod budget;
 mod claude_session;
 mod detector;
 mod notify;
+mod pricing;
 mod resume;
 mod sync;
 mod tmux;
