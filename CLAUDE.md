@@ -33,14 +33,24 @@ claude-monitor --help       # Full options
 ```
 claude-tools/
 ├── src/
-│   ├── main.rs       # CLI args, event loop, terminal setup
-│   ├── app.rs        # Application state management
-│   ├── detector.rs   # Claude Code status detection from pane content
-│   ├── tmux.rs       # tmux interaction (list panes, capture content)
-│   └── ui.rs         # TUI rendering with ratatui
+│   ├── main.rs           # CLI args, event loop, terminal setup
+│   ├── app.rs            # Application state management
+│   ├── detector.rs       # Claude Code status detection logic
+│   ├── claude_session.rs # Session file parsing (~/.claude/projects, debug logs)
+│   ├── tmux.rs           # tmux interaction (list panes, capture content)
+│   └── ui.rs             # TUI rendering with ratatui
 ├── Cargo.toml
 └── CLAUDE.md
 ```
+
+## Status Detection
+
+Detection uses multiple signals for accuracy:
+
+1. **Pane title** - Claude Code sets title with `✳` marker
+2. **Session files** - `~/.claude/projects/{path}/*.jsonl` for context (tool, model, stop_reason)
+3. **Debug logs** - `~/.claude/debug/{session}.txt` for real-time state (Stream started, idle_prompt)
+4. **Screen content** - Fallback for permission prompts (Allow/Deny buttons)
 
 ## Development
 

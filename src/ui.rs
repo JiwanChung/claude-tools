@@ -368,17 +368,60 @@ fn render_full_items(panes: &[&crate::app::PaneState], selected_index: usize) ->
 
             let mut lines = vec![line1, line2];
 
-            // Add detail on separate line(s) if present
-            if let Some(ref detail) = pane_state.status.detail {
-                for detail_part in detail.lines() {
-                    let detail_line = Line::from(vec![
-                        Span::raw("       "),
+            // Add pane task (from tmux title) if present
+            if let Some(ref task) = pane_state.status.pane_task {
+                let task_line = Line::from(vec![
+                    Span::raw("     "),
+                    Span::styled(
+                        task.chars().take(70).collect::<String>(),
+                        Style::default().fg(Color::Cyan),
+                    ),
+                ]);
+                lines.push(task_line);
+            }
+
+            // Add user prompt on separate line if present
+            if let Some(ref prompt) = pane_state.status.last_user_prompt {
+                let truncated: String = prompt.chars().take(80).collect();
+                let prompt_line = Line::from(vec![
+                    Span::raw("     "),
+                    Span::styled("> ", Style::default().fg(Color::DarkGray)),
+                    Span::styled(
+                        truncated,
+                        Style::default().fg(Color::White),
+                    ),
+                ]);
+                lines.push(prompt_line);
+            }
+
+            // Add tool info if working
+            if status == Status::Working {
+                if let (Some(ref tool), Some(ref detail)) = (&pane_state.status.current_tool, &pane_state.status.tool_detail) {
+                    let tool_line = Line::from(vec![
+                        Span::raw("     "),
+                        Span::styled(format!("{}: ", tool), Style::default().fg(Color::Magenta)),
                         Span::styled(
-                            detail_part.to_string(),
+                            detail.chars().take(60).collect::<String>(),
                             Style::default().fg(Color::White),
                         ),
                     ]);
-                    lines.push(detail_line);
+                    lines.push(tool_line);
+                }
+            }
+
+            // Add detail on separate line(s) if present (and no user prompt shown)
+            if pane_state.status.last_user_prompt.is_none() {
+                if let Some(ref detail) = pane_state.status.detail {
+                    for detail_part in detail.lines() {
+                        let detail_line = Line::from(vec![
+                            Span::raw("       "),
+                            Span::styled(
+                                detail_part.to_string(),
+                                Style::default().fg(Color::White),
+                            ),
+                        ]);
+                        lines.push(detail_line);
+                    }
                 }
             }
 

@@ -82,7 +82,7 @@ impl App {
             capture_lines,
             show_all_panes: show_all,
             compact_mode: compact,
-            group_by_session: true,
+            group_by_session: false,
             show_stats: false,
             collapsed_sessions: HashSet::new(),
             status_filter: None,
@@ -107,7 +107,7 @@ impl App {
 
             let content = tmux::capture_pane(&pane.id, self.capture_lines).unwrap_or_default();
             let content_hash = hash_content(&content);
-            let status = detector::detect_status(&content);
+            let status = detector::detect_status_from_session(&pane.tty, &content, Some(&pane.title));
 
             // Get preview (last non-empty line)
             let preview = content

@@ -1,5 +1,6 @@
 mod app;
 mod budget;
+mod claude_session;
 mod detector;
 mod notify;
 mod resume;

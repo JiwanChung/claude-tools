@@ -43,6 +43,8 @@ pub struct Pane {
     pub window_index: u32,
     pub pane_index: u32,
     pub current_path: String,
+    pub tty: String,
+    pub title: String,
 }
 
 impl Pane {
@@ -60,7 +62,7 @@ pub fn list_panes() -> Result<Vec<Pane>> {
             "list-panes",
             "-a",
             "-F",
-            "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_current_path}",
+            "#{pane_id}\t#{session_name}\t#{window_index}\t#{pane_index}\t#{pane_current_path}\t#{pane_tty}\t#{pane_title}",
         ])
         .output()
         .context("Failed to execute tmux list-panes")?;
@@ -78,13 +80,15 @@ pub fn list_panes() -> Result<Vec<Pane>> {
         .lines()
         .filter_map(|line| {
             let parts: Vec<&str> = line.split('\t').collect();
-            if parts.len() >= 5 {
+            if parts.len() >= 7 {
                 Some(Pane {
                     id: parts[0].to_string(),
                     session_name: parts[1].to_string(),
                     window_index: parts[2].parse().unwrap_or(0),
                     pane_index: parts[3].parse().unwrap_or(0),
                     current_path: parts[4].to_string(),
+                    tty: parts[5].to_string(),
+                    title: parts[6].to_string(),
                 })
             } else {
                 None
@@ -122,6 +126,8 @@ mod tests {
             window_index: 1,
             pane_index: 0,
             current_path: "/home/user".to_string(),
+            tty: "/dev/ttys001".to_string(),
+            title: "test title".to_string(),
         };
         assert_eq!(pane.display_name(), "dev:1.0");
     }

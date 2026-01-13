@@ -1,3 +1,4 @@
+use crate::claude_session::{self, SessionInfo};
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,21 +39,164 @@ impl fmt::Display for Status {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct DetectionResult {
     pub status: Status,
     pub detail: Option<String>,
     pub tokens: Option<String>,
+    // Rich context from session files
+    pub last_user_prompt: Option<String>,
+    pub current_tool: Option<String>,
+    pub tool_detail: Option<String>,
+    pub model: Option<String>,
+    // Task from pane title
+    pub pane_task: Option<String>,
 }
 
-/// Detect Claude Code status from pane content
+impl Default for Status {
+    fn default() -> Self {
+        Status::NotClaudeCode
+    }
+}
+
+/// Detect Claude Code status using robust signals:
+/// 1. Pane title (✳ marker) for Claude Code detection
+/// 2. Session files for context (tool, prompt)
+/// 3. Debug log for status (idle_prompt vs Stream started)
+/// 4. Screen content only for permission detection
+pub fn detect_status_from_session(tty: &str, content: &str, pane_title: Option<&str>) -> DetectionResult {
+    // Check if this is a Claude Code session via pane title
+    let is_claude = pane_title.map(|t| t.contains("✳")).unwrap_or(false);
+
+    // Extract task from pane title
+    let pane_task = pane_title.and_then(|title| extract_task_from_title(title));
+
+    // If not Claude Code by title, check if we can find a Claude process
+    if !is_claude {
+        // Try to find Claude process - if found, it's Claude Code
+        if let Some(session_info) = claude_session::get_session_info_by_tty(tty) {
+            let mut result = detect_from_session_info(session_info, content);
+            result.pane_task = pane_task;
+            return result;
+        }
+        // No Claude process and no ✳ in title - not Claude Code
+        return DetectionResult {
+            status: Status::NotClaudeCode,
+            ..Default::default()
+        };
+    }
+
+    // It's Claude Code - get session info for context and status
+    if let Some(session_info) = claude_session::get_session_info_by_tty(tty) {
+        let mut result = detect_from_session_info(session_info, content);
+        result.pane_task = pane_task;
+        return result;
+    }
+
+    // Claude Code by title but no process found - likely idle/completed
+    // Use screen content as fallback for status
+    let mut result = detect_status(content);
+    result.pane_task = pane_task;
+    result
+}
+
+/// Extract task description from Claude Code pane title
+/// Title format: "✳ Task Description 2.1.5"
+fn extract_task_from_title(title: &str) -> Option<String> {
+    if !title.contains("✳") {
+        return None;
+    }
+    let task = title.trim_start_matches("✳").trim();
+    // Remove version number at end (e.g., "2.1.5")
+    if let Some(space_pos) = task.rfind(' ') {
+        let potential_version = &task[space_pos + 1..];
+        if potential_version.chars().all(|c| c.is_ascii_digit() || c == '.') {
+            let trimmed = task[..space_pos].trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+    if task.is_empty() {
+        None
+    } else {
+        Some(task.to_string())
+    }
+}
+
+/// Convert SessionInfo to DetectionResult
+fn detect_from_session_info(info: SessionInfo, content: &str) -> DetectionResult {
+    // Determine status primarily from debug log signals
+    let status = if info.is_streaming {
+        // Debug log shows active streaming - definitely working
+        Status::Working
+    } else if info.is_idle {
+        // Debug log shows idle_prompt - check for permission prompt on screen
+        // (permission prompts happen when idle, waiting for user approval)
+        if is_permission_prompt(content) {
+            Status::PermissionRequired
+        } else {
+            Status::WaitingForInput
+        }
+    } else {
+        // No clear signal from debug log - check stop_reason from JSONL
+        match info.stop_reason.as_deref() {
+            Some("tool_use") => {
+                // Last message was tool_use - either running or waiting for permission
+                if is_permission_prompt(content) {
+                    Status::PermissionRequired
+                } else {
+                    Status::Working
+                }
+            }
+            Some("end_turn") => Status::WaitingForInput,
+            _ => {
+                // Fallback: use screen content
+                if content.contains("esc to interrupt") {
+                    Status::Working
+                } else if is_permission_prompt(content) {
+                    Status::PermissionRequired
+                } else {
+                    Status::WaitingForInput
+                }
+            }
+        }
+    };
+
+    // Build detail string
+    let detail = if status == Status::Working {
+        // Show what tool is running
+        match (&info.current_tool, &info.tool_detail) {
+            (Some(tool), Some(detail)) => Some(format!("{}: {}", tool, detail)),
+            (Some(tool), None) => Some(tool.clone()),
+            _ => info.last_user_prompt.clone(),
+        }
+    } else if status == Status::PermissionRequired {
+        extract_permission_detail(content)
+    } else {
+        // Show last action when waiting
+        info.last_user_prompt.clone().or_else(|| extract_last_action(content))
+    };
+
+    DetectionResult {
+        status,
+        detail,
+        tokens: extract_tokens(content),
+        last_user_prompt: info.last_user_prompt,
+        current_tool: info.current_tool,
+        tool_detail: info.tool_detail,
+        model: info.model,
+        pane_task: None, // Set by caller
+    }
+}
+
+/// Detect Claude Code status from pane content (fallback method)
 pub fn detect_status(content: &str) -> DetectionResult {
     // Check if this looks like Claude Code at all
     if !is_claude_code_session(content) {
         return DetectionResult {
             status: Status::NotClaudeCode,
-            detail: None,
-            tokens: None,
+            ..Default::default()
         };
     }
 
@@ -64,6 +208,7 @@ pub fn detect_status(content: &str) -> DetectionResult {
             status: Status::Working,
             detail: last_command,
             tokens,
+            ..Default::default()
         };
     }
 
@@ -73,7 +218,7 @@ pub fn detect_status(content: &str) -> DetectionResult {
         return DetectionResult {
             status: Status::PermissionRequired,
             detail: permission_detail,
-            tokens: None,
+            ..Default::default()
         };
     }
 
@@ -84,7 +229,7 @@ pub fn detect_status(content: &str) -> DetectionResult {
     DetectionResult {
         status: Status::WaitingForInput,
         detail: last_action,
-        tokens: None,
+        ..Default::default()
     }
 }
 
